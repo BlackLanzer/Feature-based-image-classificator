@@ -45,7 +45,7 @@ void CodebookWorker::detectAndCluster(QString method, Feature2D* detector, Featu
 
     vector< vector < descType > > featuresMat;
 
-   // #pragma omp parallel for shared(detector,extractor,totalFilesCount,featuresMat)
+    #pragma omp parallel for shared(detector,extractor,totalFilesCount,featuresMat)
     for( unsigned int fileIx = 0; fileIx<fileList.size(); fileIx++ )
     {
         bool abortRequested = false;
@@ -156,7 +156,7 @@ void CodebookWorker::detectAndCluster(QString method, Feature2D* detector, Featu
     }
     else //kMajority for orb
     {
-        kMajority(data,centers, 20);
+        kMajority(data,centers, 200);
     }
 
     codebook = centers;
