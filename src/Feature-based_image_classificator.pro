@@ -35,7 +35,7 @@ FORMS    += mainwindow.ui
 QMAKE_CXXFLAGS += -fopenmp -L/usr/local/lib/vl
 QMAKE_LFLAGS +=  -fopenmp -L/usr/local/lib/vl
 QMAKE_CFLAGS_DEBUG   += -fopenmp -L/usr/local/lib/vl
-QMAKE_CFLAGS_RELEASE +=  -fopenmp -L/usr/local/lib/vl
+QMAKE_CFLAGS_RELEASE +=  -fopenmp -L/usr/local/lib/vl -O2
 
 install_it.path = $$OUT_PWD
 install_it.files = *.wav .*.wav *.ico
