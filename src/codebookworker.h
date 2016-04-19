@@ -2,8 +2,11 @@
 #define CODEBOOKWORKER_H
 
 #include <QThread>
+#include <vector>
+#include <opencv2/features2d.hpp>
 
 using namespace std;
+using namespace cv;
 
 class CodebookWorker : public QObject
 {
@@ -13,9 +16,12 @@ class CodebookWorker : public QObject
 
  public:
      CodebookWorker();
+     template<typename descType>
+     void detectAndCluster(QString method, Feature2D* detector, Feature2D* extractor, vector < pair < int, string > > fileList, QString inputFolder, QString outputFile, int splitPercent, int minHessian, int clusterSize );
 
  public slots:
      void doWork( QString method, QString inputFolder, QString outputFile, int splitPercent, int minHessian, int clusterSize );
+
 
  signals:
      void imgReadingDone();

@@ -137,3 +137,101 @@ time_t fileLastModification( const char* filename )
 
     return -1;
 }
+
+void kMajority(InputArray data, OutputArray centers, int maxIterations = 20)
+{
+    Mat matCenters = centers.getMat();
+    Mat matData = data.getMat();
+    vector<int> labels(matData.rows); //the cluster of each keypoint
+    vector<int> clusterSizes(matCenters.rows);
+
+    // create random centers
+    std::srand(std::time(0));
+    for (int i=0;i<centers.rows();i++)
+     for (int j=0;j<centers.cols();j++)
+         matCenters.at<uchar>(i,j) = std::rand();
+
+    bool centroidsChanged = true;
+    while(centroidsChanged && maxIterations-- > 0)
+    {
+        centroidsChanged = false;
+        // assign keypoints to clusters
+        for (int keypointIndex = 0; keypointIndex<matData.rows; keypointIndex++)
+        {
+            int minDistance = INT_MAX;
+            int index = -1; // the closer cluster
+            for (int clusterIndex = 0; clusterIndex<matCenters.rows; clusterIndex++)
+            {
+                 int distance = 0;
+
+                 // to calculate the distance of all the bitstream we have to sum every single element
+                 // because the bitstream is split in 32 uchars
+                 for (int i=0; i<matData.cols; i++)
+                 {
+                     distance += hamming(matData.at<uchar>(keypointIndex,i),matCenters.at<uchar>(clusterIndex,i));
+                 }
+                 if (distance < minDistance)
+                 {
+                     minDistance = distance;
+                     index = clusterIndex;
+                 }
+
+            }
+            if (index > -1)
+            {
+                labels[keypointIndex] = index;
+            }
+        }
+
+        // we use a single vector of vectors to accumulate all the votes
+        vector < vector < int > > v(matCenters.rows);
+        for (int i=0; i<v.size(); i++)
+        {
+            v[i].resize(matCenters.cols*sizeof(uchar)*8);
+        }
+
+        // populate v with the votes and calculate the size of clusters
+        for (int i = 0; i<matData.rows; i++)
+        {
+            int vIndex = 0;
+            for (int j=0; j<matData.cols; j++)
+            {
+                for (int bit = 0; bit<8; bit++)
+                {
+                    v[labels[i]][vIndex++] += (matData.at<uchar>(i,j) >> bit) & 0x01;
+                }
+            }
+            for (int clusterIndex=0; clusterIndex<matCenters.rows; clusterIndex++)
+            {
+                if (labels[i] == clusterIndex)
+                {
+                    clusterSizes[clusterIndex]++;
+                    break;
+                }
+            }
+        }
+        // calculate new centroids:
+        // for each centroid check for each bit if more than half of votes wants to change it
+        for (int i=0; i<matCenters.rows; i++)
+        {
+            int vIndex = 0;
+            for (int j=0; j<matCenters.cols; j++)
+            {
+                for (int bit=0; bit<8; bit++)
+                {
+                    if (v[i][vIndex++] > clusterSizes[i]/2)
+                    {
+                        matCenters.at<uchar>(i,j) |= 0x80 >> bit;
+                        centroidsChanged = true;
+                    }
+                }
+            }
+        }
+    }
+}
+
+
+int hamming(uchar a, uchar b)
+{
+    return __builtin_popcount(a^b);
+}

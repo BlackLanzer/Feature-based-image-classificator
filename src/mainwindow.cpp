@@ -40,6 +40,7 @@ MainWindow::MainWindow(QWidget *parent) :
     ui->featureDetectionMethod->addItem( "SURF" );
     ui->featureDetectionMethod->addItem( "SIFT" );
     ui->featureDetectionMethod->addItem( "KAZE" );
+    ui->featureDetectionMethod->addItem( "ORB" );
 
     ui->histogramMethod       ->addItem( "Bag of Words"           );
     ui->histogramMethod       ->addItem( "Fisher Vector" );
@@ -229,7 +230,9 @@ void MainWindow::on_featureDetectionMethod_currentIndexChanged(int)
 {
     ui->minHessian->setEnabled( ui->featureDetectionMethod->currentText() == "SURF" );
     ui->label_2   ->setEnabled( ui->featureDetectionMethod->currentText() == "SURF" );
+    ui->histogramMethod->setEnabled(ui->featureDetectionMethod->currentText() != "ORB" );
 }
+
 
 void MainWindow::on_inputCodebook_textChanged()
 {
@@ -505,6 +508,10 @@ bool MainWindow::readCodebookMetadata( fstream& fin )
     {
         method = "KAZE";
     }
+    else if( row.find( "ORB" ) != string::npos )
+    {
+        method = "ORB";
+    }
     else
     {
         return false;
@@ -566,7 +573,7 @@ bool MainWindow::readCodebookMetadata( fstream& fin )
         return false;
 
     descriptorSize = atoi( row.substr( pos+17, end ).c_str() );
-    if( descriptorSize<64 || descriptorSize > 128 )
+    if(! (descriptorSize==32 || descriptorSize==64 || descriptorSize == 128 || descriptorSize == 256) )
         return false;
 
     return true;

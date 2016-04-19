@@ -14,6 +14,7 @@
 #include <opencv2/nonfree/nonfree.hpp>
 #include <omp.h>
 #include <stdlib.h>
+#include <typeinfo>
 
 #include "utils.h"
 
@@ -24,36 +25,11 @@ CodebookWorker::CodebookWorker()
 {
 }
 
-void CodebookWorker::doWork( QString method, QString inputFolder, QString outputFile, int splitPercent, int minHessian, int clusterSize )
+template<typename descType>
+void CodebookWorker::detectAndCluster(QString method, Feature2D* detector, Feature2D* extractor, vector < pair < int, string > > fileList, QString inputFolder, QString outputFile, int splitPercent, int minHessian, int clusterSize )
 {
-    vector< string > dir_list;
     struct timespec start, img_read, clustering;
-
-    logStream << "\nCODEBOOK -- using method: " << method.toStdString();
-    if( method == "SURF" )
-        logStream << ", minHessian: " << minHessian;
-    logStream << ", clusterSize: " << clusterSize << "\n";
-
     Mat codebook;
-
-    Feature2D *detector = NULL;
-    Feature2D *extractor = NULL;
-
-    if( method == "SIFT" )
-    {
-        detector  = new SiftFeatureDetector    ();
-        extractor = new SiftDescriptorExtractor();
-    }
-    else if( method == "SURF" )
-    {
-        detector  = new SurfFeatureDetector    ( minHessian );
-        extractor = new SurfDescriptorExtractor();
-    }
-    else if( method == "KAZE" )
-    {
-        detector  = new KAZE();
-        extractor = new KAZE();
-    }
 
     if( detector == NULL || extractor == NULL)
     {
@@ -62,42 +38,14 @@ void CodebookWorker::doWork( QString method, QString inputFolder, QString output
         return;
     }
 
-    if( num_dirs( inputFolder.toStdString().c_str(), dir_list ) < 0 )
-    {
-        logStream << "Incorrect input folder, aborting.\n";
-        throwError( "Incorrect input folder" );
-        return;
-    }
-
     clock_gettime( CLOCK_REALTIME, &start );
 
     int totalKeypoints  = 0;
     int totalFilesCount = 0;
 
-    emit setupProgressBar( inputFolder, splitPercent );
+    vector< vector < descType > > featuresMat;
 
-    vector< vector < float > > featuresMat;
-
-    // Create file list using splitPercent files of each directory
-    vector < pair < int, string > > fileList;
-    for( unsigned int dirIx = 0; dirIx<dir_list.size(); dirIx++ )
-    {
-        char path[256];
-        sprintf( path,"%s/%s", inputFolder.toStdString().c_str(), dir_list[ dirIx ].c_str() );
-
-        vector< string > pathFileList;
-
-        int dirFileCount   = num_images( path, pathFileList );
-        int trainFileCount = floor( dirFileCount * splitPercent / 100.0f );
-
-        for( int fileIx = 0; fileIx < trainFileCount; fileIx++ )
-        {
-            sprintf( path,"%s/%s/%s", inputFolder.toStdString().c_str(), dir_list[ dirIx ].c_str(), pathFileList[ fileIx ].c_str() );
-            fileList.push_back( pair<int,string>( dirIx, path ) );
-        }
-    }
-
-    #pragma omp parallel for shared(detector,extractor,totalFilesCount,featuresMat)
+   // #pragma omp parallel for shared(detector,extractor,totalFilesCount,featuresMat)
     for( unsigned int fileIx = 0; fileIx<fileList.size(); fileIx++ )
     {
         bool abortRequested = false;
@@ -156,9 +104,9 @@ void CodebookWorker::doWork( QString method, QString inputFolder, QString output
         {
             for( int i=0; i<descriptors.rows; i++ )
             {
-                vector< float > tmp;
+                vector< descType > tmp;
                 for( int j = 0; j<descriptors.cols; j++)
-                    tmp.push_back( descriptors.at<float>(i,j) );
+                    tmp.push_back( descriptors.at<descType>(i,j) );
 
                 featuresMat.push_back( tmp );
             }
@@ -192,17 +140,24 @@ void CodebookWorker::doWork( QString method, QString inputFolder, QString output
         logStream << "\nWarning: totalKeypoints is less than desired clusterSize!\nNew clusterSize is " << totalKeypoints << "\n\n";
     }
 
-    int descriptorLen = method == "SIFT" ? 128 : 64;
+    int descriptorLen = method == "SIFT" ? 128 : method == "ORB" ? 32 : 64;
 
-    Mat data( featuresMat.size(), descriptorLen, CV_32F );
+    Mat data( featuresMat.size(), descriptorLen,typeid(descType) == typeid(float) ? CV_32F : CV_8UC1 );
     for( unsigned int s = 0; s<featuresMat.size(); s++ )
         for( int i=0; i<descriptorLen; i++ )
-            data.at<float>(s, i) = featuresMat[s][i];
+            data.at<descType>(s, i) = featuresMat[s][i];
 
     // do cluster
     Mat clusterLabels;
-    Mat centers( clusterSize, descriptorLen, CV_32F );
-    kmeans( data, clusterSize, clusterLabels, TermCriteria( CV_TERMCRIT_ITER|CV_TERMCRIT_EPS, 20, 0.0001 ), 20, KMEANS_PP_CENTERS, centers );
+    Mat centers( clusterSize, descriptorLen, typeid(descType) == typeid(float) ? CV_32F : CV_8UC1 );
+    if (typeid(descType) == typeid(float))
+    {
+        kmeans( data, clusterSize, clusterLabels, TermCriteria( CV_TERMCRIT_ITER|CV_TERMCRIT_EPS, 20, 0.0001 ), 20, KMEANS_PP_CENTERS, centers );
+    }
+    else //kMajority for orb
+    {
+        kMajority(data,centers, 20);
+    }
 
     codebook = centers;
 
@@ -228,11 +183,16 @@ void CodebookWorker::doWork( QString method, QString inputFolder, QString output
         fout << ", minHessian: " << minHessian;
     fout << ", clusterSize: " << codebook.rows << ", descriptorsSize: " << codebook.cols;
     fout << ", dataset: '" << inputFolder.toStdString() << "', training percent: " << splitPercent << '%' << endl;
-
+    cout << "VALORE : " << (int) codebook.at<descType>(0,0);
     for( int i = 0; i<codebook.rows; i++ )
     {
         for( int j = 0; j<codebook.cols; j++ )
-            fout << codebook.at<float>(i,j) << "|";
+        {
+            if (method == "ORB")
+                fout << (int)codebook.at<descType>(i,j) << "|";
+            else
+                fout << codebook.at<descType>(i,j) << "|";
+        }
         fout << endl;
     }
     fout.close();
@@ -245,6 +205,75 @@ void CodebookWorker::doWork( QString method, QString inputFolder, QString output
 
     logStream << "Image Reading:   " << imgReadingMins << "m, " << imgReadingSecs << "s.\n";
     logStream << "Clustering:      " << clusteringMins << "m, " << clusteringSecs << "s.\n";
+
+
+}
+
+void CodebookWorker::doWork( QString method, QString inputFolder, QString outputFile, int splitPercent, int minHessian, int clusterSize )
+{
+
+    vector< string > dir_list;
+    if( num_dirs( inputFolder.toStdString().c_str(), dir_list ) < 0 )
+    {
+        logStream << "Incorrect input folder, aborting.\n";
+        throwError( "Incorrect input folder" );
+        return;
+    }
+
+    logStream << "\nCODEBOOK -- using method: " << method.toStdString();
+    if( method == "SURF" )
+        logStream << ", minHessian: " << minHessian;
+    logStream << ", clusterSize: " << clusterSize << "\n";
+
+    // Create file list using splitPercent files of each directory
+    vector < pair < int, string > > fileList;
+    for( unsigned int dirIx = 0; dirIx<dir_list.size(); dirIx++ )
+    {
+        char path[256];
+        sprintf( path,"%s/%s", inputFolder.toStdString().c_str(), dir_list[ dirIx ].c_str() );
+
+        vector< string > pathFileList;
+
+        int dirFileCount   = num_images( path, pathFileList );
+        int trainFileCount = floor( dirFileCount * splitPercent / 100.0f );
+
+        for( int fileIx = 0; fileIx < trainFileCount; fileIx++ )
+        {
+            sprintf( path,"%s/%s/%s", inputFolder.toStdString().c_str(), dir_list[ dirIx ].c_str(), pathFileList[ fileIx ].c_str() );
+            fileList.push_back( pair<int,string>( dirIx, path ) );
+        }
+    }
+
+    emit setupProgressBar( inputFolder, splitPercent );
+
+    Feature2D *detector = NULL;
+    Feature2D *extractor = NULL;
+
+    if( method == "SIFT" )
+    {
+        detector  = new SiftFeatureDetector    ();
+        extractor = new SiftDescriptorExtractor();
+        detectAndCluster<float>(method, detector, extractor, fileList, inputFolder, outputFile, splitPercent, minHessian, clusterSize);
+    }
+    else if( method == "SURF" )
+    {
+        detector  = new SurfFeatureDetector    ( minHessian );
+        extractor = new SurfDescriptorExtractor();
+        detectAndCluster<float>(method, detector, extractor, fileList, inputFolder, outputFile, splitPercent, minHessian, clusterSize);
+    }
+    else if( method == "KAZE" )
+    {
+        detector  = new KAZE();
+        extractor = new KAZE();
+        detectAndCluster<float>(method, detector, extractor, fileList, inputFolder, outputFile, splitPercent, minHessian, clusterSize);
+    }
+    else if( method == "ORB" )
+    {
+        detector = new ORB();
+        extractor = new ORB();
+        detectAndCluster<uchar>(method, detector, extractor, fileList, inputFolder, outputFile, splitPercent, minHessian, clusterSize);
+    }
+
 
     emit clusteringDone();
     emit processingDone();

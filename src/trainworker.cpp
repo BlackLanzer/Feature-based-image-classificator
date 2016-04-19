@@ -12,6 +12,7 @@
 #include <opencv2/objdetect/objdetect.hpp>
 #include <opencv2/nonfree/nonfree.hpp>
 #include "utils.h"
+#include <typeinfo>
 
 extern "C"
 {
@@ -52,7 +53,13 @@ void TrainWorker::doWork( QString inputFile, QString histogramMethod )
     datasetFolder = toLocalPath( datasetFolder );
 
     Mat codebook( clusterSize, descriptorSize, CV_32FC1 );
-    readCodebook( fin, codebook );
+    if (method == "ORB")
+    {
+        codebook.convertTo(codebook,CV_8UC1);
+        readCodebook<uchar>( fin, codebook );
+    }
+    else
+        readCodebook<float>( fin, codebook );
 
     fin.close();
 
@@ -79,6 +86,11 @@ void TrainWorker::doWork( QString inputFile, QString histogramMethod )
     {
         detector  = new KAZE();
         extractor = new KAZE();
+    }
+    else if ( method == "ORB" )
+    {
+        detector = new ORB();
+        extractor = new ORB();
     }
 
     if( detector == NULL || extractor == NULL )
@@ -394,8 +406,10 @@ void TrainWorker::doWork( QString inputFile, QString histogramMethod )
 
 vector< float > TrainWorker::createHistogram( const Mat &codebook, const Mat &descriptors )
 {
-    if( histogramMethod == "Bag of Words" )
-        return createBOWHistogram   ( codebook, descriptors );
+    if (method == "ORB")
+        return createBOWHistogramORB(codebook, descriptors);
+    else if( histogramMethod == "Bag of Words" )
+        return createBOWHistogram( codebook, descriptors );
     else
         return createFisherHistogram( descriptors, codebook.cols );
 }
@@ -445,6 +459,39 @@ vector< float > TrainWorker::createBOWHistogram( const Mat &codebook, const Mat 
     //for( unsigned int i = 0; i<histogram.size(); i++)
     //  histogram[i] = 1.0f / ( 1+exp( -histogram[i] ) );
 
+    return histogram;
+}
+
+vector< float > TrainWorker::createBOWHistogramORB( const Mat &codebook, const Mat &descriptors )
+{
+    vector< float > histogram;
+
+    histogram.resize( codebook.rows );
+
+    for( int descriptorIndex = 0; descriptorIndex<descriptors.rows; descriptorIndex++ )
+    {
+        int minDistance = INT_MAX;
+        int index = -1; // the closer cluster
+
+        for( int cbIndex = 0; cbIndex < codebook.rows; cbIndex++ )
+        {
+            int distance = 0;
+            for (int i=0; i< descriptors.cols; i++)
+            {
+                distance += hamming(descriptors.at<uchar>(descriptorIndex,i), codebook.at<uchar>(cbIndex, i));
+            }
+            if (distance < minDistance)
+            {
+                minDistance = distance;
+                index = cbIndex;
+            }
+        }
+
+        if( index > -1 )
+            histogram[index]++;
+        else
+            cerr << "OVERFLOW";
+    }
     return histogram;
 }
 
@@ -690,6 +737,10 @@ bool TrainWorker::readCodebookMetadata( fstream& fin )
     {
         method = "KAZE";
     }
+    else if( row.find( "ORB" ) != string::npos )
+    {
+        method = "ORB";
+    }
     else
     {
         logStream << "Unknown feature detection method in input file.\n";
@@ -773,7 +824,7 @@ bool TrainWorker::readCodebookMetadata( fstream& fin )
         return false;
     }
     descriptorSize = atoi( row.substr( pos+17, end ).c_str() );
-    if( descriptorSize < 64 || descriptorSize > 128 )
+    if(!(descriptorSize==32 || descriptorSize==64 || descriptorSize == 128 || descriptorSize==256))
     {
         logStream << "Invalid descriptorSize value in input file.\n";
         throwError( "Invalid descriptorSize value in input file." );
@@ -783,13 +834,14 @@ bool TrainWorker::readCodebookMetadata( fstream& fin )
     return true;
 }
 
+template <typename T>
 void TrainWorker::readCodebook( fstream &fin, cv::Mat &codebook )
 {
     string row;
     char*  pch;
     int    rowcounter = 0;
 
-    vector< vector< float > > matrow;
+    vector< vector< T > > matrow;
     matrow.resize( clusterSize );
 
     getline( fin, row );
@@ -799,7 +851,7 @@ void TrainWorker::readCodebook( fstream &fin, cv::Mat &codebook )
 
         while( pch != NULL )
         {
-            matrow[ rowcounter ].push_back( strtofloat( pch ) );
+            matrow[ rowcounter ].push_back( typeid(T) == typeid(float) ? strtofloat( pch ) : (uchar) atoi(pch) );
             pch = strtok( NULL, "|" );
         }
         rowcounter++;
@@ -809,5 +861,5 @@ void TrainWorker::readCodebook( fstream &fin, cv::Mat &codebook )
 
     for( int i=0; i<codebook.rows; i++ )
         for( int j=0; j<codebook.cols; j++ )
-            codebook.at<float>(i,j) = matrow.at(i).at(j);
+            codebook.at<T>(i,j) = matrow.at(i).at(j);
 }

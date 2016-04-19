@@ -31,18 +31,20 @@ private:
      vector< string > categories;
 
      VlGMM* gmm;
+     template<typename T> void readCodebook( fstream &fin, cv::Mat &codebook );
 
 public slots:
      void doWork( QString inputFile, QString histogramMethod );
 
 private slots:
      bool readCodebookMetadata( fstream &fin );
-     void readCodebook        ( fstream &fin, cv::Mat &codebook );
+     //template<typename T> void readCodebook( fstream &fin, cv::Mat &codebook );
 
      void setupGMM( const cv::Mat &codebook );
 
      vector< float > createHistogram      ( const cv::Mat &codebook,    const cv::Mat &descriptors );
-     vector< float > createBOWHistogram   ( const cv::Mat &codebook,    const cv::Mat &descriptors );
+     vector< float > createBOWHistogram( const cv::Mat &codebook,    const cv::Mat &descriptors );
+     vector< float > createBOWHistogramORB( const cv::Mat &codebook,    const cv::Mat &descriptors );
      vector< float > createFisherHistogram( const cv::Mat &descriptors, int dimension );
 
      float accuracy ( const vector< vector< int > > &confusion );
