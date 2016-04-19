@@ -18,7 +18,7 @@ On the top of the window you'll find the parameters to tell the program how to c
 
 These parameters are:
 
-1. *Feature-detection method* <small>One of SURF, SIFT or KAZE</small>
+1. *Feature-detection method* <small>One of SURF, SIFT, KAZE or ORB</small>
 2. *Min hessian* <small>Minimum Hessian value to detect keypoints. For SIFT only</small>
 3. *Codebook clusters* <small>Number of clusters to group all the detected features (codebook size)</small>
 4. *Dataset folder* <small>Input dataset folder. Accepts tilde as home path and filesystem browsing using the button on the right side. <br>*@see* Dataset structure *below* </small>
@@ -31,7 +31,8 @@ These parameters are:
 
 Once you've setup all the parameters, click on *Create Codebook* button to start the codebook creation process. This will extract the keypoints from each image of the training subset and then cluster them in the desired number of codebook entries. 
 
-*KMeans* is used as clustering algorithm.
+*KMeans* is used as clustering algorithm for SURF, SIFT and KAZE.
+*KMajority* is used for ORB.
 
 The resulting .cbk file contains an header with the parameters used to create the codebook (which will later be needed during the testing part) and the matrix representing the codebook data.
 
@@ -39,7 +40,7 @@ The resulting .cbk file contains an header with the parameters used to create th
 
 **Training and testing**
 
-Once you've set the input codebook file, use the dropdown to select an *Images histogram creation method*, which can be *Bag of Words* or *Fisher Vector*.
+Once you've set the input codebook file, use the dropdown to select an *Images histogram creation method*, which can be *Bag of Words* or *Fisher Vector* (not for ORB).
 
 Click on *Train SVM* to start the process.
 
