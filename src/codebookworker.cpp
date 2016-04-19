@@ -183,7 +183,7 @@ void CodebookWorker::detectAndCluster(QString method, Feature2D* detector, Featu
         fout << ", minHessian: " << minHessian;
     fout << ", clusterSize: " << codebook.rows << ", descriptorsSize: " << codebook.cols;
     fout << ", dataset: '" << inputFolder.toStdString() << "', training percent: " << splitPercent << '%' << endl;
-    cout << "VALORE : " << (int) codebook.at<descType>(0,0);
+
     for( int i = 0; i<codebook.rows; i++ )
     {
         for( int j = 0; j<codebook.cols; j++ )
