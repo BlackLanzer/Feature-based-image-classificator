@@ -138,7 +138,7 @@ time_t fileLastModification( const char* filename )
     return -1;
 }
 
-void kMajority(InputArray data, OutputArray centers, int maxIterations = 20)
+void kMajority(InputArray data, OutputArray centers, int maxIterations)
 {
     Mat matCenters = centers.getMat();
     Mat matData = data.getMat();
@@ -149,7 +149,7 @@ void kMajority(InputArray data, OutputArray centers, int maxIterations = 20)
     std::srand(std::time(0));
     for (int i=0;i<centers.rows();i++)
      for (int j=0;j<centers.cols();j++)
-         matCenters.at<uchar>(i,j) = std::rand();
+         matCenters.at<uchar>(i,j) = std::rand() % 256;
 
     bool centroidsChanged = true;
     while(centroidsChanged && maxIterations-- > 0)
@@ -184,21 +184,26 @@ void kMajority(InputArray data, OutputArray centers, int maxIterations = 20)
         }
 
         // we use a single vector of vectors to accumulate all the votes
+        // to have the bit equals to 1
         vector < vector < int > > v(matCenters.rows);
         for (int i=0; i<v.size(); i++)
         {
             v[i].resize(matCenters.cols*sizeof(uchar)*8);
         }
 
+        clusterSizes.clear();
+        clusterSizes.resize(matCenters.rows);
         // populate v with the votes and calculate the size of clusters
         for (int i = 0; i<matData.rows; i++)
         {
-            int vIndex = 0;
             for (int j=0; j<matData.cols; j++)
             {
                 for (int bit = 0; bit<8; bit++)
                 {
-                    v[labels[i]][vIndex++] += (matData.at<uchar>(i,j) >> bit) & 0x01;
+                    // 7-bit+j*8 because we want to read v from left to right
+                    // with right shifting and a bitwise and we get only the bit-th bit
+                    v[labels[i]][7-bit+j*8] += (matData.at<uchar>(i,j) >> bit) & 0x01;
+
                 }
             }
             for (int clusterIndex=0; clusterIndex<matCenters.rows; clusterIndex++)
@@ -212,17 +217,24 @@ void kMajority(InputArray data, OutputArray centers, int maxIterations = 20)
         }
         // calculate new centroids:
         // for each centroid check for each bit if more than half of votes wants to change it
+        uchar oldValue;
         for (int i=0; i<matCenters.rows; i++)
         {
-            int vIndex = 0;
             for (int j=0; j<matCenters.cols; j++)
             {
                 for (int bit=0; bit<8; bit++)
                 {
-                    if (v[i][vIndex++] > clusterSizes[i]/2)
+                    if (v[i][bit+j*8] > clusterSizes[i]/2) // set the bit at 1 if the majority vote for it
                     {
-                        matCenters.at<uchar>(i,j) |= 0x80 >> bit;
-                        centroidsChanged = true;
+                        oldValue = matCenters.at<uchar>(i,j);
+                        matCenters.at<uchar>(i,j) |= 0x80 >> bit; // 0x80 = 10000000
+                        centroidsChanged |= oldValue != matCenters.at<uchar>(i,j); // with the OR because we want it to stay at true
+                    }
+                    else if (v[i][bit+j*8] < clusterSizes[i]/2)// set the bit at 0
+                    {
+                        oldValue = matCenters.at<uchar>(i,j);
+                        matCenters.at<uchar>(i,j) &= ~(0x80 >> bit);    // ~0x80 = 01111111
+                        centroidsChanged |= oldValue != matCenters.at<uchar>(i,j);
                     }
                 }
             }

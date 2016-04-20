@@ -156,7 +156,7 @@ void CodebookWorker::detectAndCluster(QString method, Feature2D* detector, Featu
     }
     else //kMajority for orb
     {
-        kMajority(data,centers, 200);
+        kMajority(data,centers, 35);
     }
 
     codebook = centers;
