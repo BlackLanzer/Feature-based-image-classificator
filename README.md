@@ -1,6 +1,6 @@
 <big>**Feature-based image classificator**</big>
 
-A simple, graphical tool to test the performance of image classificators based on image features extracted using *Scale-Invariant Feature Transform (SIFT)*, *Speeded Up Robust Features (SURF)* or *KAZE* and encoded using *Bag of Words* or *Fisher Vector*.
+A simple, graphical tool to test the performance of image classificators based on image features extracted using *Scale-Invariant Feature Transform (SIFT)*, *Speeded Up Robust Features (SURF)*, *KAZE* or *ORB* and encoded using *Bag of Words* or *Fisher Vector*.
 
 <br/>
 
